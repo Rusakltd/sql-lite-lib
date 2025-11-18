@@ -1,0 +1,41 @@
+# MacOS
+.DS_Store
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Distribution / packaging
+*.egg-info/
+
+# pyenv
+.python-version
+
+# VSCode / IDE configs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs and databases
+*.log
+*.db
+init_db.py
+*.sql
+
+*.mmd
+*.json
