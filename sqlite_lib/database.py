@@ -102,12 +102,20 @@ class DataAggregator:
         return cursor.fetchone()
     
     def get_all_vk_balances(self):
-        """Получить все сохраненные балансы VK по проектам за сегодня"""
+        """
+        Получить все сохраненные балансы VK по проектам за сегодня:
+        - Название проекта
+        - Баланс
+        """
         cursor = self.conn.cursor()
         cursor.execute('''
-            SELECT * FROM vk_balances 
-            WHERE DATE(fetched_at) = DATE('now')
-            ORDER BY fetched_at DESC
+            SELECT 
+                p.name as project_name,
+                vb.balance,
+                vb.fetched_at
+            FROM vk_balances vb
+            JOIN projects p ON vb.vk_cabinet_id = p.vk_cabinet_id
+            WHERE DATE(vb.fetched_at) = DATE('now')
         ''')
 
         # Получаем названия колонок
