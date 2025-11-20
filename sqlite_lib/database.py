@@ -109,8 +109,13 @@ class DataAggregator:
             WHERE DATE(fetched_at) = DATE('now')
             ORDER BY fetched_at DESC
         ''')
-        return cursor.fetchall()
 
+        # Получаем названия колонок
+        columns = [description[0] for description in cursor.description]
+
+        # Преобразуем каждую строку в словарь
+        results = cursor.fetchall()
+        return [dict(zip(columns, row)) for row in results]
 
     def get_latest_data_for_digest(self):
         """Получить последние данные по всем активным проектам для дайджеста"""
