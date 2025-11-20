@@ -101,6 +101,17 @@ class DataAggregator:
         ''', (mytracker_project_id,))
         return cursor.fetchone()
     
+    def get_all_vk_balances(self):
+        """Получить все сохраненные балансы VK по проектам за сегодня"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT * FROM vk_balances 
+            WHERE DATE(fetched_at) = DATE('now')
+            ORDER BY fetched_at DESC
+        ''')
+        return cursor.fetchall()
+
+
     def get_latest_data_for_digest(self):
         """Получить последние данные по всем активным проектам для дайджеста"""
         cursor = self.conn.cursor()
