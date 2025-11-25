@@ -65,13 +65,23 @@ class DataAggregator:
         ''', (yandex_cabinet_id, balance))
         self.conn.commit()
     
-    def save_mt_stats(self, mytracker_project_id, installs, cost):
-        """Сохранить статистику MyTracker для проекта"""
+    def save_mt_stats(self, mytracker_project_id, registrations=0, first_logins=0, 
+                     reactivations=0, installs=None, cost=None):
+        """Сохранить статистику MyTracker для проекта
+        
+        Args:
+            mytracker_project_id: ID проекта в MyTracker
+            registrations: количество регистраций
+            first_logins: количество первых входов
+            reactivations: количество реактиваций
+            installs: количество установок (legacy, deprecated)
+            cost: стоимость (legacy, deprecated)
+        """
         cursor = self.conn.cursor()
         cursor.execute('''
-            INSERT INTO mt_stats (mytracker_project_id, installs, cost)
-            VALUES (?, ?, ?)
-        ''', (mytracker_project_id, installs, cost))
+            INSERT INTO mt_stats (mytracker_project_id, registrations, first_logins, reactivations)
+            VALUES (?, ?, ?, ?)
+        ''', (mytracker_project_id, registrations, first_logins, reactivations))
         self.conn.commit()
     
     def get_project_by_vk_cabinet(self, vk_cabinet_id):
@@ -81,7 +91,8 @@ class DataAggregator:
             SELECT * FROM projects 
             WHERE vk_cabinet_id = ? AND is_active = 1
         ''', (vk_cabinet_id,))
-        return cursor.fetchone()
+        row = cursor.fetchone()
+        return dict(row) if row else None
     
     def get_project_by_yandex_cabinet(self, yandex_cabinet_id):
         """Найти проект по Yandex кабинету"""
@@ -90,7 +101,8 @@ class DataAggregator:
             SELECT * FROM projects 
             WHERE yandex_cabinet_id = ? AND is_active = 1
         ''', (yandex_cabinet_id,))
-        return cursor.fetchone()
+        row = cursor.fetchone()
+        return dict(row) if row else None
     
     def get_project_by_mytracker_id(self, mytracker_project_id):
         """Найти проект по MyTracker ID"""
@@ -99,7 +111,8 @@ class DataAggregator:
             SELECT * FROM projects 
             WHERE mytracker_project_id = ? AND is_active = 1
         ''', (mytracker_project_id,))
-        return cursor.fetchone()
+        row = cursor.fetchone()
+        return dict(row) if row else None
     
     def get_all_vk_balances(self):
         """
@@ -205,6 +218,107 @@ class DataAggregator:
         
         return stats
     
+    def get_digest_data(self, icon_path_template='logo/{project}.jpg', days_back=2):
+        """Получить данные для дайджеста со всеми расчетами
+        
+        Args:
+            icon_path_template: шаблон пути к иконкам проектов, {project} будет заменен на название
+            days_back: количество дней для расчета изменений (по умолчанию 2 - вчера и позавчера)
+        
+        Returns:
+            dict: готовые данные для дайджеста с разделами yandex, vk, mt
+        """
+        projects = self.get_list_of_projects()
+        
+        yandex_data = []
+        vk_data = []
+        mt_data = []
+        
+        for project in projects:
+            if not project.get('is_active'):
+                continue
+                
+            # Получаем статистику за период
+            stats = self.get_project_stats_for_period(
+                vk_cabinet_id=project.get('vk_cabinet_id'),
+                yandex_cabinet_id=project.get('yandex_cabinet_id'),
+                mytracker_project_id=project.get('mytracker_project_id'),
+                days=days_back
+            )
+            
+            # Yandex данные
+            if project.get('yandex_cabinet_id') and 'yandex_balances' in stats:
+                yandex_balances = stats['yandex_balances']
+                if len(yandex_balances) >= 1:
+                    current = yandex_balances[-1]['avg_balance']
+                    previous = yandex_balances[-2]['avg_balance'] if len(yandex_balances) > 1 else current
+                    
+                    yandex_data.append({
+                        'project': project['name'],
+                        'spend': self._format_number(current),
+                        'change': self._calculate_change(current, previous)
+                    })
+            
+            # VK данные
+            if project.get('vk_cabinet_id') and 'vk_balances' in stats:
+                vk_balances = stats['vk_balances']
+                if len(vk_balances) >= 1:
+                    current = vk_balances[-1]['avg_balance']
+                    previous = vk_balances[-2]['avg_balance'] if len(vk_balances) > 1 else current
+                    
+                    # Формируем путь к иконке
+                    icon_path = icon_path_template.format(
+                        project=project['name'].lower().replace(' ', '_')
+                    )
+                    
+                    vk_data.append({
+                        'icon_path': icon_path,
+                        'name': project['name'],
+                        'spend': self._format_number(current),
+                        'change': self._calculate_change(current, previous)
+                    })
+            
+            # MyTracker данные
+            if project.get('mytracker_project_id') and 'mt_stats' in stats:
+                mt_stats = stats['mt_stats']
+                if len(mt_stats) >= 1:
+                    current = mt_stats[-1]
+                    previous = mt_stats[-2] if len(mt_stats) > 1 else current
+                    
+                    current_regs = current['total_registrations'] or 0
+                    previous_regs = previous['total_registrations'] or 0
+                    
+                    mt_data.append({
+                        'name': project['name'],
+                        'regs': str(current_regs),
+                        'fl': str(current['total_first_logins'] or 0),
+                        'ret': str(current['total_reactivations'] or 0),
+                        'users': current_regs,
+                        'change': self._calculate_change(current_regs, previous_regs)
+                    })
+        
+        return {
+            'yandex': yandex_data,
+            'vk': vk_data,
+            'mt': mt_data
+        }
+    
+    @staticmethod
+    def _calculate_change(current, previous):
+        """Вычислить процентное изменение"""
+        if previous == 0 or previous is None:
+            return 0
+        return round(((current - previous) / previous) * 100, 2)
+    
+    @staticmethod
+    def _format_number(num):
+        """Форматировать число с разделителями тысяч"""
+        if num is None:
+            return "0"
+        return f"{num:,.2f}".replace(",", " ").replace(".", ",")
+
+
+
     def delete_project(self, project_id):
         """Удалить проект и все связанные данные"""
         cursor = self.conn.cursor()
