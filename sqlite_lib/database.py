@@ -66,7 +66,7 @@ class DataAggregator:
         self.conn.commit()
     
     def save_mt_stats(self, mytracker_project_id, registrations=0, first_logins=0, 
-                     reactivations=0, installs=None, cost=None):
+                     reactivations=0):
         """Сохранить статистику MyTracker для проекта
         
         Args:
@@ -74,8 +74,6 @@ class DataAggregator:
             registrations: количество регистраций
             first_logins: количество первых входов
             reactivations: количество реактиваций
-            installs: количество установок (legacy, deprecated)
-            cost: стоимость (legacy, deprecated)
         """
         cursor = self.conn.cursor()
         cursor.execute('''
