@@ -64,6 +64,35 @@ class DataAggregator:
             VALUES (?, ?)
         ''', (yandex_cabinet_id, balance))
         self.conn.commit()
+
+    def save_yandex_balances_bulk(self, balances):
+        """Сохранить балансы Yandex для нескольких кабинетов одним запросом.
+
+        Args:
+            balances: список словарей в формате
+                [{'login': 'cabinet_id', 'amount': 123.45}, ...]
+
+        Returns:
+            int: количество успешно добавленных записей.
+        """
+        rows_to_insert = []
+        for item in balances:
+            login = item.get('login')
+            amount = item.get('amount')
+            if not login or amount is None:
+                continue
+            rows_to_insert.append((login, amount))
+
+        if not rows_to_insert:
+            return 0
+
+        cursor = self.conn.cursor()
+        cursor.executemany('''
+            INSERT INTO yandex_balances (yandex_cabinet_id, balance)
+            VALUES (?, ?)
+        ''', rows_to_insert)
+        self.conn.commit()
+        return len(rows_to_insert)
     
     def save_mt_stats(self, mytracker_project_id, registrations=0, first_logins=0, 
                      reactivations=0):
