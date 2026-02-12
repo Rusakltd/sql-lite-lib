@@ -95,7 +95,7 @@ class DataAggregator:
         return len(rows_to_insert)
     
     def save_mt_stats(self, mytracker_project_id, registrations=0, first_logins=0, 
-                     reactivations=0):
+                     reactivations=0, fetched_at=None):
         """Сохранить статистику MyTracker для проекта
         
         Args:
@@ -103,13 +103,78 @@ class DataAggregator:
             registrations: количество регистраций
             first_logins: количество первых входов
             reactivations: количество реактиваций
+            fetched_at: дата/время записи (опционально)
         """
         cursor = self.conn.cursor()
-        cursor.execute('''
-            INSERT INTO mt_stats (mytracker_project_id, registrations, first_logins, reactivations)
-            VALUES (?, ?, ?, ?)
-        ''', (mytracker_project_id, registrations, first_logins, reactivations))
+        if fetched_at is None:
+            cursor.execute('''
+                INSERT INTO mt_stats (mytracker_project_id, registrations, first_logins, reactivations)
+                VALUES (?, ?, ?, ?)
+            ''', (mytracker_project_id, registrations, first_logins, reactivations))
+        else:
+            cursor.execute('''
+                INSERT INTO mt_stats (mytracker_project_id, registrations, first_logins, reactivations, fetched_at)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (mytracker_project_id, registrations, first_logins, reactivations, fetched_at))
         self.conn.commit()
+
+    def save_mt_stats_bulk(self, stats, fetched_at=None, replace_for_date=False):
+        """Сохранить статистику MyTracker для нескольких проектов.
+
+        Args:
+            stats: список словарей формата
+                [{'mytracker_project_id': '123', 'registrations': 10,
+                  'first_logins': 8, 'reactivations': 1}, ...]
+            fetched_at: общая дата/время для всех записей (опционально)
+            replace_for_date: если True и fetched_at задан, предварительно
+                удаляются записи за эту дату по указанным проектам.
+
+        Returns:
+            int: количество добавленных записей.
+        """
+        rows_to_insert = []
+        for item in stats:
+            project_id = item.get('mytracker_project_id')
+            if not project_id:
+                continue
+            rows_to_insert.append((
+                project_id,
+                int(item.get('registrations', 0) or 0),
+                int(item.get('first_logins', 0) or 0),
+                int(item.get('reactivations', 0) or 0),
+            ))
+
+        if not rows_to_insert:
+            return 0
+
+        cursor = self.conn.cursor()
+
+        if replace_for_date and fetched_at is not None:
+            ids = sorted(set(row[0] for row in rows_to_insert))
+            placeholders = ",".join(["?"] * len(ids))
+            cursor.execute(
+                f'''
+                DELETE FROM mt_stats
+                WHERE DATE(fetched_at) = DATE(?)
+                  AND mytracker_project_id IN ({placeholders})
+                ''',
+                [fetched_at, *ids],
+            )
+
+        if fetched_at is None:
+            cursor.executemany('''
+                INSERT INTO mt_stats (mytracker_project_id, registrations, first_logins, reactivations)
+                VALUES (?, ?, ?, ?)
+            ''', rows_to_insert)
+        else:
+            rows_with_date = [(*row, fetched_at) for row in rows_to_insert]
+            cursor.executemany('''
+                INSERT INTO mt_stats (mytracker_project_id, registrations, first_logins, reactivations, fetched_at)
+                VALUES (?, ?, ?, ?, ?)
+            ''', rows_with_date)
+
+        self.conn.commit()
+        return len(rows_to_insert)
     
     def get_project_by_vk_cabinet(self, vk_cabinet_id):
         """Найти проект по VK кабинету"""
