@@ -165,6 +165,54 @@ class DataAggregator:
         results = cursor.fetchall()
         return [dict(zip(columns, row)) for row in results]
 
+    def get_all_yandex_balances_today(self, latest_per_cabinet=True):
+        """
+        Получить балансы Yandex за сегодня.
+
+        Args:
+            latest_per_cabinet: если True, возвращается только последний
+                баланс по каждому кабинету за сегодня.
+        """
+        cursor = self.conn.cursor()
+
+        if latest_per_cabinet:
+            cursor.execute('''
+                SELECT
+                    yb.yandex_cabinet_id,
+                    p.name AS project_name,
+                    yb.balance,
+                    yb.fetched_at
+                FROM yandex_balances yb
+                LEFT JOIN projects p
+                    ON yb.yandex_cabinet_id = p.yandex_cabinet_id
+                INNER JOIN (
+                    SELECT
+                        yandex_cabinet_id,
+                        MAX(fetched_at) AS max_fetched_at
+                    FROM yandex_balances
+                    WHERE DATE(fetched_at) = DATE('now')
+                    GROUP BY yandex_cabinet_id
+                ) latest
+                    ON yb.yandex_cabinet_id = latest.yandex_cabinet_id
+                   AND yb.fetched_at = latest.max_fetched_at
+                ORDER BY yb.yandex_cabinet_id
+            ''')
+        else:
+            cursor.execute('''
+                SELECT
+                    yb.yandex_cabinet_id,
+                    p.name AS project_name,
+                    yb.balance,
+                    yb.fetched_at
+                FROM yandex_balances yb
+                LEFT JOIN projects p
+                    ON yb.yandex_cabinet_id = p.yandex_cabinet_id
+                WHERE DATE(yb.fetched_at) = DATE('now')
+                ORDER BY yb.yandex_cabinet_id, yb.fetched_at
+            ''')
+
+        return [dict(row) for row in cursor.fetchall()]
+
     def get_latest_data_for_digest(self):
         """Получить последние данные по всем активным проектам для дайджеста"""
         cursor = self.conn.cursor()
