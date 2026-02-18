@@ -40,3 +40,4 @@ init_db.py
 
 *.mmd
 *.json
+get_pr.py

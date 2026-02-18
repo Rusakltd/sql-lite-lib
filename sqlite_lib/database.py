@@ -510,6 +510,24 @@ class DataAggregator:
         self.conn.commit()
         return cursor.rowcount > 0
     
+
+    def edit_project_mytracker_id(self, project_id, mytracker_project_id):
+        """Изменить mytracker_id проекта
+        
+        Args:
+            project_id: ID проекта
+            mytracker_project_id: Новый mytracker_project_id
+        """
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            UPDATE projects 
+            SET mytracker_project_id = ? 
+            WHERE id = ?
+        ''', (mytracker_project_id, project_id))
+        
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
     def reset_projects_counter(self):
         """Сбросить счетчик ID проектов (использовать только если таблица пустая!)"""
         cursor = self.conn.cursor()
