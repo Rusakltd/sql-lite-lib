@@ -42,7 +42,8 @@ class DataAggregator:
                             p.name, 
                             p.vk_cabinet_id, 
                             p.yandex_cabinet_id, 
-                            p.mytracker_project_id 
+                            p.mytracker_project_id,
+                            p.is_active 
                        FROM projects p
                        ''')
         return [dict(row) for row in cursor.fetchall()]
